@@ -1,0 +1,66 @@
+<!-- 
+ * Copyright (C) Keagan Godfrey - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ * Written by Keagan Godfrey <kgodf18@gmail.com>, June 2019
+ -->
+ 
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Keagan Godfrey</title>
+  
+	<meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
+  
+  <script src="js/three/three.js"></script>
+  <script src="js/three/OrbitControls.js"></script>
+  <script src="js/three/GLTFLoader.js"></script>
+  <script src="js/tween/tween.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  
+</head>
+
+
+<body>
+  <div id="content">
+    <!-- #scene holds the canvas -->
+    <div id="scene"></div>
+
+    <!-- Home state UI -->
+    <div class="ui" id="homeUI">
+      <div class="centerBox">
+        <div class="uiLine" style="transform:rotate(45deg)"></div>
+        <div class="uiLine" style="transform:rotate(135deg)"></div>
+        <div class="uiLine" style="transform:rotate(225deg)"></div>
+        <div class="uiLine" style="transform:rotate(-45deg)"></div>
+        
+        <div class="uiBox" id="buttonWork"    style="transform:rotate(225deg)"></div>
+        <div class="uiBox" id="buttonAbout"   style="transform:rotate(45deg)"></div>
+        
+        <div class="uiLink" style="top:-21.21vh">
+          <span>work</span>
+        </div>
+        <div class="uiLink" style="top:21.21vh">
+          <span>about</span>
+        </div>
+      </div>
+    </div> <!-- end #homeUI -->
+    
+    
+    <!-- About state UI -->
+    <div class="ui hidden" id="aboutUI" style="opacity:0; visibility:hidden">
+      <div id="buttonHome">
+        <span>HOME</span>
+      </div>  
+    </div> <!-- end #aboutUI -->
+   
+  </div> <!-- end #content -->
+  
+  <script src="js/interact.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+
+</html>
