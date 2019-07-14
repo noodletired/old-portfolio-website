@@ -11,6 +11,8 @@ let renderer;
 let scene;
 let raycaster;
 let mouse;
+let depthTarget;
+let water;
 
 
 // Called immediately once body is loaded
@@ -26,8 +28,8 @@ let mouse;
   createCamera();
   //createControls();
   createLights();
-  loadModels();
   createRenderer();
+  loadModels();
 
   renderer.setAnimationLoop( () => {
     update();
@@ -42,8 +44,8 @@ function createCamera() {
   camera = new THREE.PerspectiveCamera(
     35, // FOV
     container.clientWidth / container.clientHeight, // aspect ratio
-    0.1, // near clipping plane
-    100, // far clipping plane
+    5,  // near clipping plane
+    15, // far clipping plane  : keep range small to encourage high quality depth texture
   );
 
   camera.position.copy(StateCameras[States.Home].position);
@@ -65,10 +67,41 @@ function createLights() {
   );
 
   // Create direct illumination
-  const mainLight = new THREE.DirectionalLight( 0xffffff, 2 );
+  const mainLight = new THREE.DirectionalLight( 0xFFE9BB, 2 );
   mainLight.position.set( 10, 10, 10 );
 
   scene.add( ambientLight, mainLight );
+}
+
+
+function setWaterMaterial( gltfScene ) {
+  // Define uniforms
+  let uniforms = {
+      uTime: { value: 0.0 },
+			tDiffuse: { value: depthTarget.texture },
+      cameraNear: { value: camera.near },
+      cameraFar:  { value: camera.far },
+      uDepthMap:  { value: depthTarget.depthTexture },
+      uScreenSize: {value: new THREE.Vector4(container.clientWidth, container.clientHeight, 1.0/container.clientWidth, 1.0/container.clientHeight)}
+  };
+  
+  // Define material
+  let material = new THREE.ShaderMaterial( {
+    uniforms: uniforms,
+    vertexShader: waterShader.v,
+    fragmentShader: waterShader.f,
+    transparent: false,
+    depthWrite: false
+  } );
+  
+  // Get water mesh
+  let mesh = gltfScene.getObjectByName( "Water" );
+  mesh.uniforms = uniforms;
+	mesh.material = material;
+
+  // Save water object because we need to update its material
+  water = mesh;
+  scene.add( water );
 }
 
 
@@ -78,9 +111,8 @@ function loadModels() {
 
   // Reusable function to set up animated models.
   // Accepts a position parameter to quickly place models in the scene
-  const onLoad = ( gltf, name, position ) => {
-    const model = gltf.scene.children[ 0 ];
-    model.name = name;
+  const onLoad = ( gltf, name, position, next = undefined ) => {
+    const model = gltf.scene.getObjectByName( name );
     model.position.copy( position );
 
     //const animation = gltf.animations[ 0 ];
@@ -92,6 +124,10 @@ function loadModels() {
     //action.play();
 
     scene.add( model );
+    
+    if ( next !== undefined ) {
+      next( gltf.scene );
+    }
   };
   
   // The loader will report the loading progress to this function
@@ -103,20 +139,19 @@ function loadModels() {
   // Load planet model
   const planetPosition = new THREE.Vector3( 0, 0, 0 );
   loader.load(
-     'assets/planet.gltf',
-     ( gltf ) => onLoad( gltf, "planet", planetPosition ),
+     'assets/planet.glb',
+     ( gltf ) => onLoad( gltf, "Planet", planetPosition, setWaterMaterial ),
      onProgress,
      onError
   );
-
 }
   
 
 function createRenderer() {
   // Create renderer
   renderer = new THREE.WebGLRenderer( {antialias: true} );
+  renderer.setPixelRatio( 1 ); // window.devicePixelRatio breaks depth testing when using client sizing
   renderer.setSize( container.clientWidth, container.clientHeight );
-  renderer.setPixelRatio( window.devicePixelRatio );
 
   // Set lighting constraints
   renderer.gammaFactor = 2.2;
@@ -125,6 +160,17 @@ function createRenderer() {
 
   // Add to DOM
   container.appendChild( renderer.domElement );
+  
+  // Create depth target for preprocessing
+  depthTarget = new THREE.WebGLRenderTarget( container.clientWidth, container.clientHeight, {
+    format : THREE.RGBFormat,
+    minFilter : THREE.NearestFilter,
+    magFilter : THREE.NearestFilter,
+    stencilBuffer : false,
+  } );
+  depthTarget.texture.generateMipmaps = false;
+  depthTarget.depthTexture = new THREE.DepthTexture();
+  depthTarget.depthTexture.type = THREE.UnsignedShortType;
 }
 
 
@@ -135,16 +181,33 @@ function update() {
   TWEEN.update()
   
   // Rotate planet
-  let planet = scene.getObjectByName( "planet" ) || undefined;
+  let planet = scene.getObjectByName( "Planet" ) || undefined;
   if ( planet !== undefined ) {
     planet.rotation.y += -0.001;
+  }
+  
+  // Update shader
+  if ( water !== undefined ) { // TODO: only start updates after all objects are loaded
+    water.uniforms.uTime.value += 0.1;
+    water.rotation.y += -0.001;
   }
 }
 
 
 // Render the scene
 function render() {
-  renderer.render( scene, camera );
+  // TODO: loading screen and ready functionality?
+  if ( water !== undefined ) {
+    // First pass without water
+    water.visible = false;
+    renderer.setRenderTarget( depthTarget );
+    renderer.render( scene, camera );
+    
+    // Second pass with water
+    water.visible = true;
+    renderer.setRenderTarget( null );
+    renderer.render( scene, camera );
+  }
 }
 
 
@@ -158,7 +221,15 @@ function onResize() {
   camera.updateProjectionMatrix();
 
   // Update the size of the renderer and canvas
-  renderer.setSize( container.clientWidth, container.clientHeight );
+  let w = container.clientWidth, h = container.clientHeight;
+  renderer.setSize( w, h );
+  depthTarget.setSize( w, h ); 
+  
+  // Update water shader uniforms
+  // TODO: maybe only add event listener after everything is loaded, to avoid these checks
+  if ( water !== undefined ) {
+    water.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
+  }
 }
 window.addEventListener( 'resize', onResize );
 
@@ -193,9 +264,9 @@ function onClick( event ) {
   
   // Register click on planet
   raycaster.setFromCamera( mouse, camera );
-  let intersects = raycaster.intersectObject( scene.getObjectByName( "planet" ), true );
+  let intersects = raycaster.intersectObject( scene.getObjectByName( "Planet" ), true );
   if( intersects.length > 0 ) {
-    if ( rootObject( intersects[ 0 ].object ).name === "planet" ) {
+    if ( rootObject( intersects[ 0 ].object ).name === "Planet" ) {
       console.log( "Planet clicked" );
     }
   }

@@ -56,7 +56,9 @@ function moveCamera() {
   let newLookAt   = StateCameras[state].lookAt;
   let newPosition = StateCameras[state].position;
   let newZoom     = StateCameras[state].zoom;
-    
+  
+  console.log("How many times");
+  
   // Begin animation
   let tween = new TWEEN.Tween( {t:0} )
        .to( {t:1}, transitionDuration)

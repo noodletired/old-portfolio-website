@@ -36,8 +36,8 @@
         <div class="uiLine" style="transform:rotate(225deg)"></div>
         <div class="uiLine" style="transform:rotate(-45deg)"></div>
         
-        <div class="uiBox" id="buttonWork"    style="transform:rotate(225deg)"></div>
-        <div class="uiBox" id="buttonAbout"   style="transform:rotate(45deg)"></div>
+        <div class="uiBox" id="buttonWork"  style="transform:rotate(225deg)"></div>
+        <div class="uiBox" id="buttonAbout" style="transform:rotate(45deg)"></div>
         
         <div class="uiLink" style="top:-21.21vh">
           <span>work</span>
@@ -53,10 +53,26 @@
     <div class="ui hidden" id="aboutUI" style="opacity:0; visibility:hidden">
       <div id="buttonHome">
         <span>HOME</span>
-      </div>  
+      </div>
+      
+      <div class="centerBox">
+        <div id="aboutMe">
+          <div class="bubble">
+            <h1>Hello!</h1>
+            <p>I'm an educator and interaction designer currently working on [my portfolio.]</p>
+            <p>I like to create new experiences with [people/technology/art/planets/websites].</p>
+            <p>Have a challenge for me? Go ahead and water my rose.</p>
+          </div>
+        </div>
+        
+        <div id="contactMe" style="visibility:hidden">
+        </div>
+      </div>
     </div> <!-- end #aboutUI -->
    
   </div> <!-- end #content -->
+  
+  <script src="js/gl/waterShader.js"></script>
   
   <script src="js/interact.js"></script>
   <script src="js/app.js"></script>
