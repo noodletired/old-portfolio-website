@@ -13,6 +13,7 @@ let raycaster;
 let mouse;
 let depthTarget;
 let water;
+let grass;
 
 
 // Called immediately once body is loaded
@@ -30,6 +31,7 @@ let water;
   createLights();
   createRenderer();
   loadModels();
+  createGrass();
 
   renderer.setAnimationLoop( () => {
     update();
@@ -71,6 +73,49 @@ function createLights() {
   mainLight.position.set( 10, 10, 10 );
 
   scene.add( ambientLight, mainLight );
+}
+
+
+function createGrass() {
+  let billboard = new THREE.PlaneBufferGeometry(); //heightSegments = 3
+  let geometry = new THREE.InstancedBufferGeometry();
+			geometry.index = billboard.index;
+			geometry.attributes = billboard.attributes;
+      
+  const grassCount = grassPositions.length;
+  let translate = new Float32Array( grassCount * 3 );
+  let scaleRot = new Float32Array( grassCount * 3 );
+  
+  for ( let i = 0; i < grassCount; i++ ) {
+      let [x, y, z, s] = grassPositions[i];
+      translate.set( [x, z, -y], i*3, (i+1)*3 );
+      
+      let r = Math.random() * Math.PI * numGrassTypes; // multiply by numGrassTypes here for true random variation
+      scaleRot.set( [s, r], i*2, (i+1)*2 );
+  }
+  
+  geometry.addAttribute( 'translate', new THREE.InstancedBufferAttribute( translate, 3 ) );
+  geometry.addAttribute( 'scaleRot', new THREE.InstancedBufferAttribute( scaleRot, 2 ) );
+
+  let material = new THREE.RawShaderMaterial( {
+    uniforms: {
+      map: { value: new THREE.TextureLoader().load( 'assets/grass.png' ) },
+      uTime: { value: 0.0 },
+      cameraNear: { value: camera.near },
+      cameraFar:  { value: camera.far },
+      uDepthMap:  { value: depthTarget.depthTexture },
+      uScreenSize: {value: new THREE.Vector4(container.clientWidth, container.clientHeight, 1.0/container.clientWidth, 1.0/container.clientHeight)}
+    },
+    vertexShader: grassShader.v,
+    fragmentShader: grassShader.f,
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthTest: true
+  } );
+  
+  grass = new THREE.Mesh( geometry, material );
+  grass.uniforms = material.uniforms;
+  scene.add( grass );
 }
 
 
@@ -186,6 +231,11 @@ function update() {
     planet.rotation.y += -0.001;
   }
   
+  if ( grass !== undefined ) {
+    grass.uniforms.uTime.value += 0.1;
+    grass.rotation.y += -0.001;
+  }
+  
   // Update shader
   if ( water !== undefined ) { // TODO: only start updates after all objects are loaded
     water.uniforms.uTime.value += 0.1;
@@ -198,13 +248,15 @@ function update() {
 function render() {
   // TODO: loading screen and ready functionality?
   if ( water !== undefined ) {
-    // First pass without water
+    // First pass without water or grass
     water.visible = false;
+    grass.visible = false;
     renderer.setRenderTarget( depthTarget );
     renderer.render( scene, camera );
     
-    // Second pass with water
+    // Second pass with water & grass
     water.visible = true;
+    grass.visible = true;
     renderer.setRenderTarget( null );
     renderer.render( scene, camera );
   }

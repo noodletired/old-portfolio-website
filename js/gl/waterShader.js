@@ -1,4 +1,25 @@
-let waterShader = {
+const depthShading = `
+  uniform float cameraNear;
+  uniform float cameraFar;
+  uniform vec4 uScreenSize;
+  uniform sampler2D uDepthMap;
+  
+  // --- DEPTH CONVERSION --- //
+  vec3 getBufferClipPosition(sampler2D depthSampler) { 
+    vec2 uv = gl_FragCoord.xy * uScreenSize.zw;
+    float depth = texture2D(depthSampler, uv).x;
+    float z = depth * 2.0 - 1.0;
+    return vec3(uv * 2.0 - 1.0, z); // NDC
+  }
+  
+  // From https://learnopengl.com/Advanced-OpenGL/Depth-testing
+  float ndcToLinear(float z, float near, float far) {
+    return (2.0 * near * far) / (far + near - z * (far - near));
+  }
+`;
+
+
+const waterShader = {
   v: `
   uniform float uTime;
 
@@ -26,12 +47,8 @@ let waterShader = {
   varying vec2 vUV;
   varying vec3 vWaterClipPosition;
 
-  uniform sampler2D uDepthMap;
   uniform sampler2D tDiffuse;
   uniform float uTime;
-  uniform float cameraNear;
-  uniform float cameraFar;
-  uniform vec4 uScreenSize;
 
   #define waterClarity 0.2     // controls translucency by blending with scene
   #define waterCutoffDepth 3.0 // water beyond this depth will default to nearest (avoids depth to far plane)
@@ -41,7 +58,7 @@ let waterShader = {
   #define foamMaxDepth 0.1     // controls foam max thickness
   #define foamMinEdge 0.3      // controls minimum foam edge thickness
   #define distortAmount 0.1    // controls noise distortion, slightly affects size of waves
-  #define AA 0.03              // antialiasing for smoothstep
+  #define AA 0.015             // antialiasing for smoothstep
   #define timeScale 0.03
 
   // --- PERLIN NOISE --- //
@@ -101,20 +118,7 @@ let waterShader = {
     return vec4(color, alpha);
   }
 
-
-  // --- DEPTH CONVERSION --- //
-  vec3 getBufferClipPosition(sampler2D depthSampler) { 
-    vec2 uv = gl_FragCoord.xy * uScreenSize.zw;
-    float depth = texture2D(depthSampler, uv).x;
-    float z = depth * 2.0 - 1.0;
-    return vec3(uv * 2.0 - 1.0, z); // NDC
-  }
-  
-  // From https://learnopengl.com/Advanced-OpenGL/Depth-testing
-  float ndcToLinear(float z, float near, float far) {
-    return (2.0 * near * far) / (far + near - z * (far - near));
-  }
-
+  ${depthShading}
 
   // --- MAIN --- //
   void main(){
