@@ -2,6 +2,7 @@ const numGrassTypes = 2;
 const grassShader = {
   v: `
   precision highp float;
+  uniform mat4 modelMatrix;
   uniform mat4 modelViewMatrix;
   uniform mat4 projectionMatrix;
   uniform float uTime;
@@ -12,15 +13,15 @@ const grassShader = {
   attribute vec2 scaleRot;
 
   varying vec2 vUv;
-  //varying vec2 rootNDCPos;  // position of grass roots to sample colour
   varying vec3 vClipPosition; // vertex clip position
+  varying vec2 vWorldPosition; // world position
   
   #define PI 3.141592653
   #define windSpeed 0.09
-  #define grassScale 4.0
+  #define grassScale 0.2
 
   void main() {
-    vUv = uv * vec2(0.5, 1);
+    vUv = uv * vec2(0.5, 1.0);
     
     // --- WIND SWAY --- //
     float timeScaled = uTime * 0.4;
@@ -49,12 +50,7 @@ const grassShader = {
     vec4 mvPosition =  modelViewMatrix * vec4( (rotation * yRotation * (position + sway) * scale + translate + n*scale*0.45), 1.0 );
     
     gl_Position = projectionMatrix * mvPosition;
-    
-    /*
-    vec4 rootPosition = projectionMatrix * modelViewMatrix * vec4( translate - n*0.015, 1.0 );
-    rootNDCPos = rootPosition.xy / rootPosition.w;
-    */
-    
+    vWorldPosition = (modelMatrix * vec4(translate, 1.0)).xy;
     vClipPosition = gl_Position.xyz / gl_Position.w; //NDC
     
     // Change UV based on rotation
@@ -68,8 +64,8 @@ f: `
   uniform sampler2D tDiffuse;
 
   varying vec2 vUv;
-  //varying vec2 rootNDCPos;
   varying vec3 vClipPosition; // current clip position
+  varying vec2 vWorldPosition; // world position
   
   ${depthShading}
   
@@ -85,17 +81,19 @@ f: `
     return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
   }
 
-  void main() {
+  void main() {    
     vec4 diffuseColor = texture2D( map, vUv );
     
     // Alpha clip
     if ( diffuseColor.b < 0.95 ) discard;
     
+    
+    // --- FAKE LIGHTING --- //
+    // Set brightness according to world position
+    // Assumes fixed lighting at position {10, 10, 10}
+    float brighten = (vWorldPosition.y * 0.2) - .1 + (vWorldPosition.x*vWorldPosition.x * 0.15);
     vec3 grassColor = vec3(0.8, 1.0, 0.7);
-    
-    float brighten = .08;
     gl_FragColor = vec4( (diffuseColor.rrr + brighten) * grassColor, diffuseColor.b );
-    
     
     // --- DEPTH-BASED BLEND --- //
     // Calculate depth difference in scene
@@ -106,19 +104,8 @@ f: `
     float grassMaxDepth = 0.1;
     float grassDepthDifference01 = clamp(depthDifference / grassMaxDepth, 0.0, 1.0);
     
-    // Try alpha blending first
+    // Alpha blending
     gl_FragColor.a = 1.0 - (1.0 - grassDepthDifference01) * (1.0 - vUv.y);
-    
-    
-    /*
-    // --- SAMPLE-BASED BLEND --- //
-    vec3 rootColor = texture2D( tDiffuse, rootNDCPos*0.5+0.5 ).rgb;
-    vec3 rootColorHSV = rgb2hsv(rootColor);
-    if ( rootColorHSV.x > 0.21 && rootColorHSV.x < 0.38 && rootColorHSV.y > 0.1) {
-      float mixFactor = clamp(vUv.y * 2.0, 0., 1.);
-      gl_FragColor.rgb = mix(rootColor, gl_FragColor.rgb, mixFactor);
-    }
-    */
   }
   `
 }

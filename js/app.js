@@ -31,7 +31,6 @@ let grass;
   createLights();
   createRenderer();
   loadModels();
-  createGrass();
 
   renderer.setAnimationLoop( () => {
     update();
@@ -76,27 +75,43 @@ function createLights() {
 }
 
 
-function createGrass() {
-  let billboard = new THREE.PlaneBufferGeometry(); //heightSegments = 3
-  let geometry = new THREE.InstancedBufferGeometry();
-			geometry.index = billboard.index;
-			geometry.attributes = billboard.attributes;
-      
-  const grassCount = grassPositions.length;
+function processPlanet( gltfScene ) {
+  createGrass( gltfScene );
+  setWaterMaterial( gltfScene );
+}
+
+
+function createGrass( gltfScene ) {
+  // Create base geometry
+  let grassFidelity = 3;
+  let baseGeometry = new THREE.Geometry();
+  for (let i = 0; i < grassFidelity; i++) {
+    let billboard = new THREE.PlaneGeometry(1,1,1,3);
+    billboard.rotateY( Math.PI * i / grassFidelity );
+    baseGeometry.merge( billboard );
+  }
+  let geometry = new THREE.InstancedBufferGeometry().fromGeometry( baseGeometry );
+  
+  // Pre-define GPU arrays
+  const grassCount = 500;
   let translate = new Float32Array( grassCount * 3 );
   let scaleRot = new Float32Array( grassCount * 3 );
   
+  // Set positions, scales and rotations
+  const grassLocs = gltfScene.getObjectByName( "GrassLocs" ).geometry;
   for ( let i = 0; i < grassCount; i++ ) {
-      let [x, y, z, s] = grassPositions[i];
-      translate.set( [x, z, -y], i*3, (i+1)*3 );
-      
-      let r = Math.random() * Math.PI * numGrassTypes; // multiply by numGrassTypes here for true random variation
-      scaleRot.set( [s, r], i*2, (i+1)*2 );
+    let point = THREE.GeometryUtils.randomPointsInBufferGeometry( grassLocs, 1 )[0];
+    translate.set( [point.x, point.y, point.z], i*3, (i+1)*3 );
+    
+    let s = Math.random() * 0.8 + 0.2;
+    let r = Math.random() * Math.PI * numGrassTypes; // multiply by numGrassTypes here for true random variation
+    scaleRot.set( [s, r], i*2, (i+1)*2 );
   }
   
   geometry.addAttribute( 'translate', new THREE.InstancedBufferAttribute( translate, 3 ) );
   geometry.addAttribute( 'scaleRot', new THREE.InstancedBufferAttribute( scaleRot, 2 ) );
 
+  // Define material
   let material = new THREE.RawShaderMaterial( {
     uniforms: {
       map: { value: new THREE.TextureLoader().load( 'assets/grass.png' ) },
@@ -113,6 +128,7 @@ function createGrass() {
     depthTest: true
   } );
   
+  // Make it one big mesh
   grass = new THREE.Mesh( geometry, material );
   grass.uniforms = material.uniforms;
   scene.add( grass );
@@ -185,7 +201,7 @@ function loadModels() {
   const planetPosition = new THREE.Vector3( 0, 0, 0 );
   loader.load(
      'assets/planet.glb',
-     ( gltf ) => onLoad( gltf, "Planet", planetPosition, setWaterMaterial ),
+     ( gltf ) => onLoad( gltf, "Planet", planetPosition, processPlanet ),
      onProgress,
      onError
   );
