@@ -12,8 +12,12 @@ let scene;
 let raycaster;
 let mouse;
 let depthTarget;
+
+let planet;
 let water;
 let grass;
+
+const homeCameraPosition = new THREE.Vector3( 0, 0, 10 );
 
 
 // Called immediately once body is loaded
@@ -27,7 +31,6 @@ let grass;
   raycaster = new THREE.Raycaster()
 
   createCamera();
-  //createControls();
   createLights();
   createRenderer();
   loadModels();
@@ -45,17 +48,20 @@ function createCamera() {
   camera = new THREE.PerspectiveCamera(
     35, // FOV
     container.clientWidth / container.clientHeight, // aspect ratio
-    5,  // near clipping plane
-    15, // far clipping plane  : keep range small to encourage high quality depth texture
+    1,  // near clipping plane
+    14, // far clipping plane  : keep range small to encourage high quality depth texture
   );
 
-  camera.position.copy(StateCameras[States.Home].position);
+  camera.position.copy( homeCameraPosition );
 }
 
 
 function createControls() {
   // Create an orbit controller
-  controls = new THREE.OrbitControls( camera, container );
+  controls = new THREE.ObjectControls( camera, window, planet );
+  controls.disableVerticalRotation();
+  controls.setRotationSpeed(0.01);
+  controls.setDamping(0.05);
 }
 
 
@@ -76,8 +82,10 @@ function createLights() {
 
 
 function processPlanet( gltfScene ) {
+  planet = gltfScene.getObjectByName( 'Planet' );
   createGrass( gltfScene );
-  setWaterMaterial( gltfScene );
+  createWater( gltfScene );
+  createControls();
 }
 
 
@@ -95,7 +103,7 @@ function createGrass( gltfScene ) {
   // Pre-define GPU arrays
   const grassCount = 500;
   let translate = new Float32Array( grassCount * 3 );
-  let scaleRot = new Float32Array( grassCount * 3 );
+  let scaleRot = new Float32Array( grassCount * 2 );
   
   // Set positions, scales and rotations
   const grassLocs = gltfScene.getObjectByName( "GrassLocs" ).geometry;
@@ -103,8 +111,8 @@ function createGrass( gltfScene ) {
     let point = THREE.GeometryUtils.randomPointsInBufferGeometry( grassLocs, 1 )[0];
     translate.set( [point.x, point.y, point.z], i*3, (i+1)*3 );
     
-    let s = Math.random() * 0.8 + 0.2;
-    let r = Math.random() * Math.PI * numGrassTypes; // multiply by numGrassTypes here for true random variation
+    let s = Math.random() * 0.6 + 0.2;
+    let r = Math.random() * Math.PI;
     scaleRot.set( [s, r], i*2, (i+1)*2 );
   }
   
@@ -131,11 +139,11 @@ function createGrass( gltfScene ) {
   // Make it one big mesh
   grass = new THREE.Mesh( geometry, material );
   grass.uniforms = material.uniforms;
-  scene.add( grass );
+  planet.add( grass );
 }
 
 
-function setWaterMaterial( gltfScene ) {
+function createWater( gltfScene ) {
   // Define uniforms
   let uniforms = {
       uTime: { value: 0.0 },
@@ -156,13 +164,12 @@ function setWaterMaterial( gltfScene ) {
   } );
   
   // Get water mesh
-  let mesh = gltfScene.getObjectByName( "Water" );
+  let mesh = planet.getObjectByName( "Water" );
   mesh.uniforms = uniforms;
 	mesh.material = material;
 
   // Save water object because we need to update its material
   water = mesh;
-  scene.add( water );
 }
 
 
@@ -183,12 +190,12 @@ function loadModels() {
 
     //const action = mixer.clipAction( animation );
     //action.play();
-
-    scene.add( model );
     
     if ( next !== undefined ) {
       next( gltf.scene );
     }
+    
+    scene.add( model );
   };
   
   // The loader will report the loading progress to this function
@@ -242,27 +249,27 @@ function update() {
   TWEEN.update()
   
   // Rotate planet
-  let planet = scene.getObjectByName( "Planet" ) || undefined;
   if ( planet !== undefined ) {
-    planet.rotation.y += -0.001;
+    controls.update();
+    planet.rotation.y += Math.sin( Date.now() / 1000 ) * 0.0005;
+    
+    // Update labels
+    updateLabels( camera, planet.rotation );
   }
   
-  if ( grass !== undefined ) {
-    grass.uniforms.uTime.value += 0.1;
-    grass.rotation.y += -0.001;
-  }
-  
-  // Update shader
+  // Update shaders
   if ( water !== undefined ) { // TODO: only start updates after all objects are loaded
+    grass.uniforms.uTime.value += 0.1;
     water.uniforms.uTime.value += 0.1;
-    water.rotation.y += -0.001;
   }
+  
 }
 
 
 // Render the scene
 function render() {
   // TODO: loading screen and ready functionality?
+  
   if ( water !== undefined ) {
     // First pass without water or grass
     water.visible = false;
@@ -295,9 +302,14 @@ function onResize() {
   
   // Update water shader uniforms
   // TODO: maybe only add event listener after everything is loaded, to avoid these checks
-  if ( water !== undefined ) {
+  if ( water !== undefined && grass !== undefined ) {
     water.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
+    grass.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
   }
+  
+  // Update transforms of popupUI
+  let label = document.querySelector(".uiLabel.popup");
+  label.style.transform = `translate(-50%, -50%) translate(${window.innerWidth/2}px,${window.innerHeight/2}px)`;
 }
 window.addEventListener( 'resize', onResize );
 

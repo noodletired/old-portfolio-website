@@ -14,7 +14,7 @@
   <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0">
   
   <script src="js/three/three.js"></script>
-  <script src="js/three/OrbitControls.js"></script>
+  <script src="js/three/ObjectControls.js"></script>
   <script src="js/three/GLTFLoader.js"></script>
   <script src="js/three/GeometryUtils.js"></script>
   <script src="js/tween/tween.js"></script>
@@ -30,52 +30,38 @@
     <div id="scene"></div>
 
     <!-- Home state UI -->
-    <div class="ui" id="homeUI">
+    <div id="homeUI">
+    
       <div class="centerBox">
-        <div class="uiLine" style="transform:rotate(45deg)"></div>
-        <div class="uiLine" style="transform:rotate(135deg)"></div>
-        <div class="uiLine" style="transform:rotate(225deg)"></div>
-        <div class="uiLine" style="transform:rotate(-45deg)"></div>
-        
-        <div class="uiBox" id="buttonWork"  style="transform:rotate(225deg)"></div>
-        <div class="uiBox" id="buttonAbout" style="transform:rotate(45deg)"></div>
-        
-        <div class="uiLink" style="top:-21.21vh">
-          <span>work</span>
-        </div>
-        <div class="uiLink" style="top:21.21vh">
-          <span>about</span>
-        </div>
+        <svg id="splash" viewBox="0 0 200 200">
+          <path id="top" fill="none" d="M50,100c0-27.6,22.4-50,50-50s50,22.4,50,50"/>
+          <path id="btm" fill="none" d="M50,100c0,27.6,22.4,50,50,50s50-22.4,50-50"/>
+          <text>
+            <textPath  xlink:href="#top" startOffset="50%">
+              welcome to
+            </textPath>
+          </text>
+          <text>
+            <textPath  xlink:href="#btm" startOffset="50%">
+              my planet
+            </textPath>
+          </text>
+        </svg>
       </div>
+      
     </div> <!-- end #homeUI -->
     
     
-    <!-- About state UI -->
-    <div class="ui hidden" id="aboutUI" style="opacity:0; visibility:hidden">
-      <div id="buttonHome">
-        <span>HOME</span>
-      </div>
-      
-      <div class="centerBox">
-        <div id="aboutMe">
-          <div class="bubble">
-            <h1>Hello!</h1>
-            <p>I'm an educator and interaction designer currently working on [my portfolio.]</p>
-            <p>I like to create new experiences with [people/technology/art/planets/websites].</p>
-            <p>Have a challenge for me? Go ahead and water my rose.</p>
-          </div>
-        </div>
-        
-        <div id="contactMe" style="visibility:hidden">
-        </div>
-      </div>
-    </div> <!-- end #aboutUI -->
+    <!-- Popup UI -->
+    <div id="popupUI" style="visibility:hidden">
+    </div> <!-- end #popupUI -->
    
   </div> <!-- end #content -->
   
   <script src="js/gl/waterShader.js"></script>
   <script src="js/gl/grassShader.js"></script>
   
+  <script src="assets/data.js"></script>
   <script src="js/interact.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -3,25 +3,193 @@
  * Proprietary and confidential
  * Written by Keagan Godfrey <kgodf18@gmail.com>, June 2019
  */
-let States = {Home:0, About:1, Work:2,};
-const StateCameras = {
-  0: {
-    lookAt:   new THREE.Vector3( 0, 0, 0 ),
-    position: new THREE.Vector3( 0, 0, 10 ),
-    zoom: 1 },
-  1: {
-    lookAt:   new THREE.Vector3( 0, -1.2, 0 ),
-    position: new THREE.Vector3( 0, 2, 6.5 ),
-    zoom: 3},
-  2: {
-    lookAt:   new THREE.Vector3( 0, 1.2, 0 ),
-    position: new THREE.Vector3( 0, -2, 6.5 ),
-    zoom: 3}
+  
+(function init() {
+  showHome(); // TODO: trigger once everything is fully loaded
+  createLabels();
+} )();
+
+
+function showHome() {
+  textElems = document.querySelectorAll( "#splash > text" );
+  for (elem of textElems) {
+    window.getComputedStyle(elem)['stroke-dashoffset'];
+    elem.style = "stroke-dashoffset: 0; fill: white"
+  }
 }
-let oldState = States.Home;
-let state = States.Home;
-let interactLock = false; // lock during camera zoom
-const transitionDuration = 1200; // ms
+
+
+function createLabels() {
+  const ui = document.getElementById( "homeUI" );
+  const labelAnimationSpeed = 0.03; // seconds
+  
+  // Create a label element for each data element in data.js
+  for (const chunk of data) {
+    const elem = document.createElement( "div" );
+          elem.className = "uiLabel shrink";
+          elem.addEventListener( "click", () => {showUI( chunk )} );
+          elem.addEventListener( "touchstart", (e) => {touchUI( e, chunk )} );
+    
+    let delay = 0.0;
+    for (const letter of chunk.name) {
+      elem.innerHTML += `<span style="transition-delay: ${delay}s;">${letter}</span>`;
+      delay += labelAnimationSpeed;
+    }
+    
+    // Save elem to local data
+    chunk.elem = elem;
+    
+    // Append to UI
+    ui.appendChild(elem);
+  }
+}
+ 
+
+function updateLabels( camera, rotation ) {
+  if ( planet == undefined ) // TODO: only run update after everything is loaded
+    return;
+  
+  const tempV = new THREE.Vector3();
+  const cameraToPoint = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+        normalMatrix.getNormalMatrix(camera.matrixWorldInverse);
+  
+  // Update each label
+  for (const chunk of data) {
+    const {position, elem} = chunk;
+    const position3 = new THREE.Vector3().fromArray(position);
+    
+    // Apply planet rotation
+    position3.applyEuler(rotation);
+
+    // Apply camera matrices
+    tempV.copy(position3);
+    tempV.applyMatrix3(normalMatrix);
+    cameraToPoint.copy(position3);
+    cameraToPoint.applyMatrix4(camera.matrixWorldInverse).normalize();
+
+    // > 0 = facing away
+    const dot = tempV.dot(cameraToPoint);
+    
+    // If the label is not facing us, shrink it away
+    if (dot > 0.2) {
+      elem.classList.remove("hover");
+      elem.classList.add("shrink");
+      continue;
+    }
+
+    // Or restore the label to its default display style
+    elem.classList.remove("shrink");
+    elem.classList.add("hover");
+
+    // Project and convert normalized position to CSS coordinates
+    tempV.copy(position3);
+    tempV.project(camera);
+    const x = (tempV.x *  .5 + .5) * container.clientWidth;
+    const y = (tempV.y * -.5 + .5) * container.clientHeight;
+    
+    // Move the elem to that position
+    elem.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+
+    // Set the zIndex for sorting (if needed)
+    //elem.style.zIndex = (-tempV.z * .5 + .5) * 100000 | 0;
+  }
+}
+
+
+let interactLock = false;
+function showUI( data ) {
+  // Prevent immediate state changes
+  if (interactLock)
+    return;
+  
+  // Prevent interaction
+  interactLock = true;
+  
+  // Disable controls
+  controls.disableHorizontalRotation();
+  
+  // Copy the label and place in the popup UI
+  data.elem.classList.add( "hovering" );
+  let label = data.elem.cloneNode( true );
+      label.innerHTML += data.body;
+      
+  let ui = document.getElementById( "popupUI" );
+      ui.style = "visibility: visible";
+      ui.appendChild( label );
+      
+      window.getComputedStyle(label).maxWidth; // flush updates
+      label.className = "uiLabel popup";
+      label.style.transform = `translate(-50%, -50%) translate(${window.innerWidth/2}px,${window.innerHeight/2}px)`;
+      console.log(label.style.transform)
+  
+  // Hide home ui
+  document.getElementById( "homeUI" ).className = "hide";
+  
+  // Animate camera
+  let newPosition = new THREE.Vector3().fromArray( data.camera );
+  let newLookAt   = new THREE.Vector3().fromArray( data.lookAt );
+  moveCamera( newPosition, newLookAt, camera );
+  
+  // Animate planet
+  let startingRotation = (planet.rotation.y %= 2 * Math.PI); // can return negative
+  if ( startingRotation < 0 ) startingRotation += 2 * Math.PI;
+  new TWEEN.Tween( {t:0} )
+       .to( {t:1}, transitionDuration )
+       .easing( TWEEN.Easing.Quadratic.InOut )
+       .onUpdate( ({t}) => {
+         planet.rotation.y = startingRotation + t * (data.planetRotation - startingRotation);
+       })
+       .start();
+}
+
+
+// Hover-click is handled as a two-touch movement here
+function touchUI( e, data ) {
+  e.preventDefault();
+  if ( data.elem.className.includes("hovering") ) {
+    showUI( data );
+  }
+  else {
+    data.elem.classList.add("hovering");
+    window.addEventListener("touchstart", function _clicked(e) {if(e.target == data.elem) return; data.elem.classList.remove("hovering"); window.removeEventListener("touchstart", _clicked)} );
+  }
+}
+
+
+const transitionDuration = 3000; // ms
+function moveCamera( newPosition, newLookAt, camera ) {
+  let currentLookAt = new THREE.Vector3();
+  let oldLookAt   = new THREE.Vector3( 0, 0, -1 ).applyQuaternion( camera.quaternion );
+  let oldPosition = new THREE.Vector3().copy( camera.position );
+  
+  
+  // Begin animation
+  let tween = new TWEEN.Tween( {t:0} )
+       .to( {t:1}, transitionDuration )
+       .easing( TWEEN.Easing.Quadratic.InOut )
+       .onUpdate( ({t}) =>
+  {
+    // Lerp current look at
+    currentLookAt.lerpVectors( oldLookAt, newLookAt, t );
+    camera.lookAt( currentLookAt );
+    
+    // Lerp position
+    camera.position.lerpVectors( oldPosition, newPosition, t );
+  } ).start();
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // Function to change state
@@ -42,42 +210,11 @@ function changeState( newState ) {
   hideOldOverlay(); // triggers showNewOverlay after, unlocks interaction when complete
   moveCamera();
 }
-document.querySelector( '#buttonAbout'   ).addEventListener( 'click', () => { changeState( States.About   ) } );
-document.querySelector( '#buttonWork'    ).addEventListener( 'click', () => { changeState( States.Work    ) } );
-document.querySelector( '#buttonHome'    ).addEventListener( 'click', () => { changeState( States.Home    ) } );
+//document.querySelector( '#buttonAbout'   ).addEventListener( 'click', () => { changeState( States.About   ) } );
+//document.querySelector( '#buttonWork'    ).addEventListener( 'click', () => { changeState( States.Work    ) } );
+//document.querySelector( '#buttonHome'    ).addEventListener( 'click', () => { changeState( States.Home    ) } );
 
 
-// Moves camera based on current state
-function moveCamera() {
-  let currentLookAt   = new THREE.Vector3( );
-  let oldLookAt   = StateCameras[oldState].lookAt;
-  let oldPosition = StateCameras[oldState].position;
-  let oldZoom     = StateCameras[oldState].zoom;
-  let newLookAt   = StateCameras[state].lookAt;
-  let newPosition = StateCameras[state].position;
-  let newZoom     = StateCameras[state].zoom;
-  
-  console.log("How many times");
-  
-  // Begin animation
-  let tween = new TWEEN.Tween( {t:0} )
-       .to( {t:1}, transitionDuration)
-       .easing( TWEEN.Easing.Quadratic.InOut )
-       .onUpdate( ({t}) =>
-  {
-    // Lerp current look at
-    currentLookAt.lerpVectors( oldLookAt, newLookAt, t );
-    camera.lookAt( currentLookAt );
-    
-    // Lerp position
-    camera.position.lerpVectors( oldPosition, newPosition, t );
-    
-    // Lerp zoom
-    camera.zoom = THREE.Math.lerp( oldZoom, newZoom, t );
-    
-    camera.updateProjectionMatrix();
-  } ).start();
-}
 
 
 // Hides old overlay

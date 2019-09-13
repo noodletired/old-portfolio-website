@@ -4,9 +4,20 @@
  * Written by Keagan Godfrey <kgodf18@gmail.com>, June 2019
  */
 
+ /* Fonts */
+@font-face {
+    font-family: heading;
+    src: url("assets/heading.woff") format('woff');
+}
+
+
+
 /* Font Size Control */
 html {
   font-size: 15px; /* global font size, referred to by rems*/
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -moz-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 
@@ -23,24 +34,28 @@ html, body, #content, #scene {
 }
 
 span {
-  font-family: impact, sans-serif;
-  font-variant: small-caps;
-  letter-spacing: 0.3em;
-  color: #fff;
+  font-family: helvetica, calibri, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+  letter-spacing: 0.2em;
+  margin-left: 0.2em;
+  text-align: center;
+  color: #555;
 }
 
 h1 {
-  font-family: impact, sans-serif;
+  font-family: Heading, sans-serif;
   font-variant: small-caps;
   font-size: 2rem;
+  letter-spacing: 0.2rem;
   font-weight: normal;
-  color: #fff;
+  color: #555;
 }
 
 p {
-  font-family: corbel, sans-serif;
+  font-family: helvetica, calibri, sans-serif;
   font-size: 1rem;
-  color: #fff;
+  color: #555;
 }
 
 #scene {
@@ -52,11 +67,21 @@ p {
   cursor: pointer;
 }
 
-.ui {
-  position: static;
-  z-index: 10;
-  height: 100%;
-  width: 100%;
+.hide {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.shrink {
+  max-width: 0 !important;
+  max-height: 0 !important;
+  padding: 0 !important;
+  background-size: 0px !important;
+  pointer-events: none;
+}
+
+.shrink > span {
+  visibility: hidden !important;
 }
 
 .centerBox {
@@ -65,72 +90,79 @@ p {
   top: 50%;
 }
 
-#buttonHome {
-  position: absolute;
-  top:0;
-  left:0;
-  z-index:10;
-  cursor:pointer; 
-  background: black;
-}
-
 
 
 /* Home UI elements */
-.uiLine {
-  position: absolute;
-  width: 30vh;
-  height: 2px;
-  transform-origin: 1px 1px;
-  transition: width 500ms ease-in-out;
-  /* box-shadow: 0 0 5px 0 rgba(0,0,0,0.2); */
-  background-image: linear-gradient(-90deg, rgba(255,255,255,0), rgba(255,255,255,1));
+#homeUI {
+  opacity: 1;
+  transition: opacity 1.2s;
 }
 
-.uiBox {
+.uiLabel {
   position: absolute;
-  width: 30vh;
-  height: 30vh;
-  transform-origin: 1px 1px;
-  transition: background-color 200ms;
-  background-color: rgba(255,255,255,0);
-  cursor: pointer;
-}
-.uiBox:hover {
-  background-color: rgba(255,255,255,0.5);
+  box-sizing: border-box;
+  max-width: 30px;
+  max-height: 30px;
+  padding: 6px 10px 10px;
+  border-radius: 15px;
+  box-shadow: 0 0 5px 0 rgba(0,0,0,.25);
+  background: white url(assets/ui.png) no-repeat local center;
+  background-size: 30px;
+  transition: max-width 0.15s linear, max-height 0.15s linear, padding 0.15s linear, background-size 0.15s linear;
 }
 
-.uiLink {
+.uiLabel:hover, .uiLabel.hovering {
+  max-width: 100px;
+  background: white;
+}
+
+.uiLabel > span {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0s linear; /* resets immediately to zero opacity */
+}
+
+.uiLabel:hover > span, .uiLabel.hovering > span {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(1.000, -0.140, 0.750, 0.750);
+}
+
+#splash {
+  width: 110vh;
+  height: 110vh;
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  position: absolute;
-  text-align: center;
-  font-size: 4vh;
-  margin-top: -2vh;
-  width: 100vw;
-  margin-left: -50vw;
+  font-family: Heading;
+  font-size: 1rem;
+  letter-spacing: 0.2rem;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-variant: small-caps;
+  text-shadow: 0 0 0.5em rgba(0, 0, 0, 0.1);
+}
+
+#splash > text {
+  stroke-dasharray: 55;
+  stroke: #fff;
+  fill: transparent;
+  stroke-width: 0.1pt;
+  stroke-dashoffset: 55;
+  transition: stroke-dashoffset 3s linear, fill 0.5s linear 3s;
 }
 
 
 
 /* About UI elements */
-#aboutMe {
-  position: absolute;
-  box-sizing: border-box;
-  width: 100vw;
-  height: 50vh;
-  left: -50vw;
-  top: -25vh;
-  padding: 0px 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.uiLabel.popup {
+  max-width: 300px;
+  max-height: 300px;
+  background: white;
+  transition: max-width .5s, max-height .5s, padding .5s, transform 1s ease 0.5s;
+  overflow: hidden;
 }
 
-.bubble {
-  display: inline-block;
-  text-align: center;
-  background: rgba(0,0,0,0.1);
-  border: 1px solid #333;
-  border-radius: 50px;
-  padding: 0px 10px;
+.uiLabel.popup > span {
+  visibility: visible;
+  opacity: 1;
 }

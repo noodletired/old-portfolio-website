@@ -1,4 +1,3 @@
-const numGrassTypes = 2;
 const grassShader = {
   v: `
   precision highp float;
@@ -15,13 +14,14 @@ const grassShader = {
   varying vec2 vUv;
   varying vec3 vClipPosition; // vertex clip position
   varying vec2 vWorldPosition; // world position
+  varying vec2 vLocalPosition; // local translate
   
   #define PI 3.141592653
   #define windSpeed 0.09
   #define grassScale 0.2
 
   void main() {
-    vUv = uv * vec2(0.5, 1.0);
+    vUv = uv * vec2(0.25, 1.0);
     
     // --- WIND SWAY --- //
     float timeScaled = uTime * 0.4;
@@ -51,49 +51,52 @@ const grassShader = {
     
     gl_Position = projectionMatrix * mvPosition;
     vWorldPosition = (modelMatrix * vec4(translate, 1.0)).xy;
+    vLocalPosition = translate.xy;
     vClipPosition = gl_Position.xyz / gl_Position.w; //NDC
     
     // Change UV based on rotation
-    if ( theta < PI ) vUv += vec2( 0.5, 0 );
-    //else if ( theta < 2*PI ) vUv += vec2( 1.0, 0 );
+    if ( theta < PI/3.0) vUv = vUv;                        // Grass 1, 33%
+    else if ( theta < 2.0*PI/3.0 ) vUv += vec2( 0.25, 0 ); // Grass 2, 33%
+    else if ( theta < 5.0*PI/6.0 ) vUv += vec2( 0.5, 0 );  // Flower 1, 16%
+    else vUv += vec2( 0.75, 0 );                           // Flower 2, 16%
   }
   `,
 f: `
   precision highp float;
   uniform sampler2D map;
-  uniform sampler2D tDiffuse;
 
   varying vec2 vUv;
-  varying vec3 vClipPosition; // current clip position
-  varying vec2 vWorldPosition; // world position
+  varying vec3 vClipPosition;  // clip position needed for depth
+  varying vec2 vWorldPosition; // world position needed for fake lighting
+  varying vec2 vLocalPosition; // local position needed for 'biomes'
   
   ${depthShading}
-  
-  // https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
-  vec3 rgb2hsv(vec3 c)
-  {
-    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-
-    float d = q.x - min(q.w, q.y);
-    float e = 1.0e-10;
-    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-  }
+  ${perlinNoise}
 
   void main() {    
     vec4 diffuseColor = texture2D( map, vUv );
     
     // Alpha clip
-    if ( diffuseColor.b < 0.95 ) discard;
+    if ( diffuseColor.b < 0.78 ) discard;
     
+    // Grass colours
+    vec3 grassHealthy = vec3(0.8, 1.0, 0.7);
+    vec3 grassDry = vec3(0.9, 1.0, 0.65);
+    vec3 grassColor = mix(grassHealthy, grassDry, snoise(vLocalPosition));
+    
+    // Flowers
+    vec3 flowerHealthy = vec3(1.0, 0.65, 1.0);
+    vec3 flowerDry = vec3(1.0, 0.9, 0.5);
+    vec3 flowerColor = mix(flowerHealthy, flowerDry, snoise(vLocalPosition.yx));
+    grassColor = mix( grassColor, flowerColor, diffuseColor.g );
     
     // --- FAKE LIGHTING --- //
     // Set brightness according to world position
+    // Flowers are always brighter
     // Assumes fixed lighting at position {10, 10, 10}
-    float brighten = (vWorldPosition.y * 0.2) - .1 + (vWorldPosition.x*vWorldPosition.x * 0.15);
-    vec3 grassColor = vec3(0.8, 1.0, 0.7);
+    float brighten = (vWorldPosition.y * 0.2) - .1 + (vWorldPosition.x*vWorldPosition.x * 0.15) + diffuseColor.g * 0.1;
     gl_FragColor = vec4( (diffuseColor.rrr + brighten) * grassColor, diffuseColor.b );
+    
     
     // --- DEPTH-BASED BLEND --- //
     // Calculate depth difference in scene
