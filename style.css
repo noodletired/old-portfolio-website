@@ -23,13 +23,13 @@ html {
 
 
 /* General */
-html, body, #content, #scene {
+html, body, #content, #scene, #loading {
   margin: 0;
   padding: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  background: #fff;
+  background: #8FBCD4; /* Colour from app.js */
   user-select: none; /* prevent double-click selection */
 }
 
@@ -56,6 +56,11 @@ p {
   font-family: helvetica, calibri, sans-serif;
   font-size: 1rem;
   color: #555;
+}
+
+#loading {
+  position: absolute;
+  z-index: 1;
 }
 
 #scene {
@@ -88,8 +93,47 @@ p {
   position: absolute;
   left: 50%;
   top: 50%;
+  transform: translate(-50%, -50%);
 }
 
+
+/* Loading UI elements */
+#loading {
+  transition: all 1s;
+}
+
+#loadingText > span {
+  display: block;
+  font-variant: small-caps;
+  text-shadow: 0 0 0.5em rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  padding: 0;
+  max-height: 0px;
+  transition: all 1s;
+}
+
+#loadingText > span.show {
+  opacity: 1;
+  padding: 10px 0 0;
+  max-height: 20px;
+}
+
+#loadingText:after {
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: bottom; 
+  animation: ellipsis steps(4, end) 3s infinite;
+  content: "\2026"; /* ascii code for the ellipsis character */
+  width: 0px;
+  color: #555;
+  margin-left: 50%;
+  transform: translate(-50%,0);
+}
+@keyframes ellipsis {
+  to {
+    width: 1.25em;    
+  }
+}
 
 
 /* Home UI elements */
@@ -131,7 +175,6 @@ p {
 #splash {
   width: 110vh;
   height: 110vh;
-  transform: translate(-50%, -50%);
   pointer-events: none;
   font-family: Heading;
   font-size: 1rem;

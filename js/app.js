@@ -4,6 +4,7 @@
  * Written by Keagan Godfrey <kgodf18@gmail.com>, June 2019
  */
 
+let loading;
 let container;
 let camera;
 let controls;
@@ -12,16 +13,19 @@ let scene;
 let raycaster;
 let mouse;
 let depthTarget;
+let mixers = [];
+const clock = new THREE.Clock();
 
 let planet;
 let water;
 let grass;
 
 const homeCameraPosition = new THREE.Vector3( 0, 0, 10 );
-
+const loadingStages = ["Loading planet", "Generating life"];
 
 // Called immediately once body is loaded
-( function init() {
+( async function init() {
+  loading = document.querySelector( "#loadingText" );
   container = document.querySelector( '#scene' );
 
   scene = new THREE.Scene();
@@ -33,7 +37,11 @@ const homeCameraPosition = new THREE.Vector3( 0, 0, 10 );
   createCamera();
   createLights();
   createRenderer();
-  loadModels();
+  await loadModels();
+  createControls();
+  createLabels();
+  showHome();
+  addEventListeners();
 
   renderer.setAnimationLoop( () => {
     update();
@@ -42,6 +50,11 @@ const homeCameraPosition = new THREE.Vector3( 0, 0, 10 );
 
 } )();
 
+
+function addEventListeners() {
+  window.addEventListener( 'resize', onResize );
+  window.addEventListener( 'mousemove', onMouseMove );
+}
 
 function createCamera() {
   // Create camera
@@ -53,15 +66,6 @@ function createCamera() {
   );
 
   camera.position.copy( homeCameraPosition );
-}
-
-
-function createControls() {
-  // Create an orbit controller
-  controls = new THREE.ObjectControls( camera, window, planet );
-  controls.disableVerticalRotation();
-  controls.setRotationSpeed(0.01);
-  controls.setDamping(0.05);
 }
 
 
@@ -81,15 +85,22 @@ function createLights() {
 }
 
 
-function processPlanet( gltfScene ) {
-  planet = gltfScene.getObjectByName( 'Planet' );
-  createGrass( gltfScene );
-  createWater( gltfScene );
-  createControls();
+function createControls() {
+  // Create an object controller
+  controls = new THREE.ObjectControls( camera, window, planet );
+  controls.disableVerticalRotation();
+  controls.setRotationSpeed(0.01);
+  controls.setDamping(0.05);
 }
 
 
-function createGrass( gltfScene ) {
+function processPlanet( {scene} ) {
+  planet = scene.getObjectByName( 'Planet' );
+  createWater( scene );
+}
+
+
+function createGrass( {scene} ) {
   // Create base geometry
   let grassFidelity = 3;
   let baseGeometry = new THREE.Geometry();
@@ -106,7 +117,7 @@ function createGrass( gltfScene ) {
   let scaleRot = new Float32Array( grassCount * 2 );
   
   // Set positions, scales and rotations
-  const grassLocs = gltfScene.getObjectByName( "GrassLocs" ).geometry;
+  const grassLocs = scene.getObjectByName( "GrassLocs" ).geometry;
   for ( let i = 0; i < grassCount; i++ ) {
     let point = THREE.GeometryUtils.randomPointsInBufferGeometry( grassLocs, 1 )[0];
     translate.set( [point.x, point.y, point.z], i*3, (i+1)*3 );
@@ -173,45 +184,68 @@ function createWater( gltfScene ) {
 }
 
 
-function loadModels() {
+// Loads models specified within the loadList
+// Planet is always loaded first, synchronously, and should be parent to all other objects
+async function loadModels() {
   // Define a loader object
-  const loader = new THREE.GLTFLoader();
+  const gltfLoader = new THREE.GLTFLoader();
 
-  // Reusable function to set up animated models.
+  // Generic function to set up animated models
   // Accepts a position parameter to quickly place models in the scene
-  const onLoad = ( gltf, name, position, next = undefined ) => {
+  const onLoad = ( gltf, name, position = [0,0,0], next = undefined ) => {
     const model = gltf.scene.getObjectByName( name );
-    model.position.copy( position );
+    model.position.fromArray( position );
 
-    //const animation = gltf.animations[ 0 ];
+    const animation = gltf.animations[ 0 ];
+    if ( animation ) {
+      const mixer = new THREE.AnimationMixer( model );
+      mixers.push( mixer );
 
-    //const mixer = new THREE.AnimationMixer( model );
-    //mixers.push( mixer );
-
-    //const action = mixer.clipAction( animation );
-    //action.play();
+      const action = mixer.clipAction( animation );
+      action.play();
+    }
     
     if ( next !== undefined ) {
-      next( gltf.scene );
+      next( gltf );
     }
     
     scene.add( model );
   };
   
-  // The loader will report the loading progress to this function
-  const onProgress = () => {};
+  // Callback to add text to the loading screen
+  function loadingCallback( progress ) {
+    console.log( `Loaded ${progress}` );
+    const elem = document.createElement( "span" );
+          elem.innerHTML = `${loadingStages[progress]}`;
+          
+    loading.appendChild( elem );
+    window.getComputedStyle( elem ).opacity;
+    elem.classList.add( "show" );
+  }
 
   // The loader will send error messages to this function
   const onError = ( error ) => { console.error( error ) };
 
-  // Load planet model
-  const planetPosition = new THREE.Vector3( 0, 0, 0 );
-  loader.load(
-     'assets/planet.glb',
-     ( gltf ) => onLoad( gltf, "Planet", planetPosition, processPlanet ),
-     onProgress,
-     onError
-  );
+  // Load planet first as it serves as the parent object to all others
+  loadingCallback( 0 );
+  await promisifyLoader( gltfLoader ).load( "assets/planet.glb" ).then( (gltf) => onLoad( gltf, "Planet", undefined, processPlanet) ).catch( onError );
+
+  let loadList = [
+    {
+      file: 'assets/grassLocs.glb',
+      load: (gltf) => createGrass( gltf ),
+      error: onError
+    }
+  ];
+
+  let promises = [];
+  for (const obj of loadList) {
+    const promiseLoader = promisifyLoader( gltfLoader );
+    promise = promiseLoader.load( obj.file ).then( obj.load ).catch( obj.error );
+    promises.push( promise );
+  }
+  
+  return allProgress( promises, loadingCallback );
 }
   
 
@@ -242,47 +276,86 @@ function createRenderer() {
 }
 
 
+// Helper: locate highest containing parent
+function rootObject( object ) {
+  while ( object.parent.type !== "Scene" ) {
+    object = object.parent;
+  }
+
+  return object;
+}
+
+
+// Helper: convert loader.load into a promise
+function promisifyLoader ( loader, onProgress ) {
+  function promiseLoader ( url ) {
+    return new Promise( ( resolve, reject ) => {
+      loader.load( url, resolve, onProgress, reject );
+    });
+  }
+
+  return {
+    originalLoader: loader,
+    load: promiseLoader,
+  };
+}
+
+
+// Helper: attach a unified progress callback on a Promise.all
+function allProgress( promises, progressCallback ) {
+  let d = 0;
+  
+  for (const p of promises) {
+    p.then( _ => {
+      d++;
+      progressCallback( d );
+    });
+  }
+  
+  return Promise.all( promises );
+}
+
+
 // Perform updates to the scene once per frame
 // Avoid heavy computation
 function update() {
+  // Get delta time
+  const delta = clock.getDelta();
+  
   // Update tweens
   TWEEN.update()
   
-  // Rotate planet
-  if ( planet !== undefined ) {
-    controls.update();
-    planet.rotation.y += Math.sin( Date.now() / 1000 ) * 0.0005;
-    
-    // Update labels
-    updateLabels( camera, planet.rotation );
-  }
-  
   // Update shaders
-  if ( water !== undefined ) { // TODO: only start updates after all objects are loaded
-    grass.uniforms.uTime.value += 0.1;
-    water.uniforms.uTime.value += 0.1;
+  grass.uniforms.uTime.value += delta * 10;
+  water.uniforms.uTime.value += delta * 10;
+  
+  // Update animation mixers
+  for ( const mixer of mixers ) {
+    mixer.update( delta );
   }
   
+  // Rotate planet
+  controls.update();
+  planet.rotation.y += Math.sin( Date.now() / 1000 ) * 0.0005;
+  
+  // Update labels
+  updateLabels( camera, planet.rotation );
 }
 
 
 // Render the scene
 function render() {
-  // TODO: loading screen and ready functionality?
+  // First pass without water or grass
+  water.visible = false;
+  grass.visible = false;
+  renderer.setRenderTarget( depthTarget );
+  renderer.render( scene, camera );
   
-  if ( water !== undefined ) {
-    // First pass without water or grass
-    water.visible = false;
-    grass.visible = false;
-    renderer.setRenderTarget( depthTarget );
-    renderer.render( scene, camera );
-    
-    // Second pass with water & grass
-    water.visible = true;
-    grass.visible = true;
-    renderer.setRenderTarget( null );
-    renderer.render( scene, camera );
-  }
+  // Second pass with water & grass
+  water.visible = true;
+  grass.visible = true;
+  renderer.setRenderTarget( null );
+  renderer.render( scene, camera );
 }
 
 
@@ -301,17 +374,13 @@ function onResize() {
   depthTarget.setSize( w, h ); 
   
   // Update water shader uniforms
-  // TODO: maybe only add event listener after everything is loaded, to avoid these checks
-  if ( water !== undefined && grass !== undefined ) {
-    water.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
-    grass.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
-  }
+  water.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
+  grass.material.uniforms.uScreenSize.value = new THREE.Vector4( w, h, 1.0/w, 1.0/h );
   
   // Update transforms of popupUI
   let label = document.querySelector(".uiLabel.popup");
   label.style.transform = `translate(-50%, -50%) translate(${window.innerWidth/2}px,${window.innerHeight/2}px)`;
 }
-window.addEventListener( 'resize', onResize );
 
 
 // Called every time the mouse is moved
@@ -332,10 +401,10 @@ function onMouseMove( event ) {
     container.classList.remove( "hover" );
   }
 }
-window.addEventListener( 'mousemove', onMouseMove );
 
 
 // Called when the mouse is clicked
+/*
 function onClick( event ) {
   event.preventDefault();
   
@@ -353,13 +422,4 @@ function onClick( event ) {
   
 }
 window.addEventListener( 'click', onClick );
-
-
-// Root object function to locate highest containing parent
-function rootObject( object ) {
-  while ( object.parent.type !== "Scene" ) {
-    object = object.parent;
-  }
-
-  return object;
-}
+*/

@@ -3,14 +3,23 @@
  * Proprietary and confidential
  * Written by Keagan Godfrey <kgodf18@gmail.com>, June 2019
  */
+
+// Helper to delay synchronous execution
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+
+// Hides loading screen and shows home
+async function showHome() {
+  // Wait for load (1 sec)
+  await delay( 1000 );
   
-(function init() {
-  showHome(); // TODO: trigger once everything is fully loaded
-  createLabels();
-} )();
-
-
-function showHome() {
+  // Hide loader
+  document.querySelector( "#loading" ).classList.add("hide");
+  
+  // Wait for transition to end
+  await delay( 1200 );
+  
+  // Show splash
   textElems = document.querySelectorAll( "#splash > text" );
   for (elem of textElems) {
     window.getComputedStyle(elem)['stroke-dashoffset'];
